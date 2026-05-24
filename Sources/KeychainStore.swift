@@ -9,16 +9,7 @@ final class KeychainStore {
     }
 
     func string(for account: String) -> String? {
-        var query = baseQuery(account: account)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
+        Self.genericPassword(service: service, account: account)
     }
 
     func set(_ value: String, for account: String) throws {
@@ -53,6 +44,25 @@ final class KeychainStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
+    }
+
+    static func genericPassword(service: String, account: String? = nil) -> String? {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        if let account {
+            query[kSecAttrAccount as String] = account
+        }
+
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
     }
 }
 

@@ -7,7 +7,8 @@ final class ProxyView: NSView {
     private let stack = NSStackView()
     private let statusLabel = NSTextField(labelWithString: "")
     private let tokenField = NSSecureTextField()
-    private let tokenButton = NSButton(title: "Save Token", target: nil, action: nil)
+    private let autoDetectButton = NSButton(title: "Auto Detect", target: nil, action: nil)
+    private let tokenButton = NSButton(title: "Save Manual", target: nil, action: nil)
     private let startStopButton = NSButton(title: "Start Proxy", target: nil, action: nil)
     private let baseURLField = NSTextField(labelWithString: "Base URL appears after start.")
     private let apiKeyField = NSTextField(labelWithString: "")
@@ -64,10 +65,10 @@ final class ProxyView: NSView {
         statusLabel.layer?.cornerRadius = 6
         statusLabel.layer?.masksToBounds = true
 
-        tokenField.placeholderString = "Paste Kiro refresh token"
+        tokenField.placeholderString = "Optional manual Kiro refresh token"
         tokenField.font = .systemFont(ofSize: 12)
 
-        [tokenButton, startStopButton, copyBaseURLButton, copyAPIKeyButton, revealAPIKeyButton].forEach {
+        [autoDetectButton, tokenButton, startStopButton, copyBaseURLButton, copyAPIKeyButton, revealAPIKeyButton].forEach {
             $0.bezelStyle = .rounded
             $0.font = .systemFont(ofSize: 12)
         }
@@ -80,7 +81,7 @@ final class ProxyView: NSView {
     }
 
     private func layoutContent() {
-        let tokenRow = row([tokenField, tokenButton], firstFills: true)
+        let tokenRow = row([autoDetectButton, tokenField, tokenButton], firstFills: false)
         let controlsRow = row([startStopButton, copyBaseURLButton], firstFills: false)
         let keyRow = row([apiKeyField, revealAPIKeyButton, copyAPIKeyButton], firstFills: true)
 
@@ -116,6 +117,8 @@ final class ProxyView: NSView {
     }
 
     private func bindActions() {
+        autoDetectButton.target = self
+        autoDetectButton.action = #selector(autoDetectKiroAuth)
         tokenButton.target = self
         tokenButton.action = #selector(saveToken)
         startStopButton.target = self
@@ -130,6 +133,7 @@ final class ProxyView: NSView {
 
     private func refresh() {
         let enabled = selectedProvider == .kiro
+        autoDetectButton.isEnabled = enabled
         tokenField.isEnabled = enabled
         tokenButton.isEnabled = enabled
         startStopButton.isEnabled = enabled
@@ -151,12 +155,12 @@ final class ProxyView: NSView {
             statusLabel.textColor = .systemGreen
             statusLabel.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.12).cgColor
             startStopButton.title = "Stop Proxy"
-            errorLabel.stringValue = ""
+            errorLabel.stringValue = service.authMessage
         case .starting:
             statusLabel.textColor = .controlAccentColor
             statusLabel.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
             startStopButton.title = "Starting..."
-            errorLabel.stringValue = ""
+            errorLabel.stringValue = "Checking Kiro Keychain auth."
         case .failed(let message):
             statusLabel.textColor = .systemRed
             statusLabel.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.12).cgColor
@@ -166,7 +170,7 @@ final class ProxyView: NSView {
             statusLabel.textColor = .secondaryLabelColor
             statusLabel.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
             startStopButton.title = "Start Proxy"
-            errorLabel.stringValue = ""
+            errorLabel.stringValue = service.authMessage
         }
 
         baseURLField.stringValue = service.baseURL ?? "Base URL appears after start."
@@ -182,6 +186,22 @@ final class ProxyView: NSView {
                 await MainActor.run {
                     tokenField.stringValue = ""
                     errorLabel.stringValue = "Kiro token saved."
+                }
+            } catch {
+                await MainActor.run {
+                    errorLabel.stringValue = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    @objc private func autoDetectKiroAuth() {
+        Task {
+            do {
+                try await service.autoDetectKiroAuth()
+                await MainActor.run {
+                    tokenField.stringValue = ""
+                    errorLabel.stringValue = service.authMessage
                 }
             } catch {
                 await MainActor.run {

@@ -22,6 +22,9 @@ final class ProxyService {
     private let server = EmbeddedProxyServer()
     private lazy var authManager = KiroAuthManager(keychain: keychain)
     private var apiKeyCache: String?
+    private(set) var authMessage = "Kiro auth will auto-detect from Keychain when proxy starts." {
+        didSet { notify() }
+    }
 
     private(set) var status: ProxyRunStatus = .stopped {
         didSet { notify() }
@@ -54,6 +57,13 @@ final class ProxyService {
 
     func saveToken(_ token: String) async throws {
         try await authManager.saveRefreshToken(token)
+        authMessage = "Manual Kiro token saved in Keychain."
+        notify()
+    }
+
+    func autoDetectKiroAuth() async throws {
+        let summary = try await authManager.importFromKiroKeychain()
+        authMessage = summary.userMessage
         notify()
     }
 
@@ -83,6 +93,9 @@ final class ProxyService {
 
     private func startServer() async {
         do {
+            if let summary = try await authManager.syncFromKiroKeychainIfAvailable() {
+                authMessage = summary.userMessage
+            }
             guard await authManager.hasRefreshToken else {
                 throw ProxyError.missingToken
             }
