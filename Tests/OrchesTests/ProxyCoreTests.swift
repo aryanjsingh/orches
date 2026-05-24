@@ -32,6 +32,20 @@ final class ProxyCoreTests: XCTestCase {
         XCTAssertEqual(payload["profileArn"] as? String, "arn:test")
     }
 
+    func testKiroPayloadBuilderNormalizesFutureClaudeMinorVersions() throws {
+        let request = try OpenAIChatRequest(json: [
+            "model": "claude-sonnet-4-6",
+            "messages": [["role": "user", "content": "Hello"]],
+        ])
+
+        let payload = try KiroPayloadBuilder().payload(for: request, profileArn: nil)
+        let state = try XCTUnwrap(payload["conversationState"] as? [String: Any])
+        let current = try XCTUnwrap(state["currentMessage"] as? [String: Any])
+        let user = try XCTUnwrap(current["userInputMessage"] as? [String: Any])
+
+        XCTAssertEqual(user["modelId"] as? String, "claude-sonnet-4.6")
+    }
+
     func testStreamParserExtractsContentAndToolCall() {
         let raw = """
         noise{"content":"Hi "}noise{"content":"there"}noise{"name":"lookup","toolUseId":"call_1","input":{}}noise{"input":"{\\"q\\":\\"x\\"}"}noise{"stop":true}
@@ -113,8 +127,11 @@ final class ProxyCoreTests: XCTestCase {
         let modelsURL = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/v1/models"))
         var modelsRequest = URLRequest(url: modelsURL)
         modelsRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        let (_, modelsResponse) = try await URLSession.shared.data(for: modelsRequest)
+        let (modelsData, modelsResponse) = try await URLSession.shared.data(for: modelsRequest)
         XCTAssertEqual((modelsResponse as? HTTPURLResponse)?.statusCode, 200)
+        let modelsObject = try JSONUtilities.object(from: modelsData)
+        let modelItems = try XCTUnwrap(modelsObject["data"] as? [[String: Any]])
+        XCTAssertTrue(modelItems.contains { $0["id"] as? String == "claude-sonnet-4.6" })
 
         var invalidRequest = URLRequest(url: modelsURL)
         invalidRequest.setValue("Bearer invalid", forHTTPHeaderField: "Authorization")

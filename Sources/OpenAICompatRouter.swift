@@ -5,6 +5,7 @@ final class OpenAICompatRouter {
     private let apiKey: String
     private let authManager: KiroAuthManager
     private let payloadBuilder = KiroPayloadBuilder()
+    private lazy var modelCatalog = KiroModelCatalog(authManager: authManager)
     private lazy var kiroClient = KiroClient(authManager: authManager)
 
     init(apiKey: String, authManager: KiroAuthManager) {
@@ -24,7 +25,7 @@ final class OpenAICompatRouter {
             }
             if method == .GET && path == "/v1/models" {
                 try authorize(headers)
-                return .json(modelsResponse())
+                return .json(try await modelsResponse())
             }
             if method == .POST && path == "/v1/chat/completions" {
                 try authorize(headers)
@@ -74,10 +75,11 @@ final class OpenAICompatRouter {
         )
     }
 
-    private func modelsResponse() -> [String: Any] {
-        [
+    private func modelsResponse() async throws -> [String: Any] {
+        let models = try await modelCatalog.models()
+        return [
             "object": "list",
-            "data": KiroModels.visible.map {
+            "data": models.map {
                 [
                     "id": $0,
                     "object": "model",
@@ -87,20 +89,4 @@ final class OpenAICompatRouter {
             },
         ]
     }
-}
-
-enum KiroModels {
-    static let visible = [
-        "auto",
-        "auto-kiro",
-        "claude-sonnet-4",
-        "claude-sonnet-4.5",
-        "claude-haiku-4.5",
-        "claude-opus-4.5",
-        "deepseek-3.2",
-        "glm-5",
-        "minimax-m2.1",
-        "minimax-m2.5",
-        "qwen3-coder-next",
-    ]
 }

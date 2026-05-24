@@ -52,14 +52,21 @@ struct KiroPayloadBuilder {
     }
 
     private func normalizeModelID(_ model: String) -> String {
-        let aliases = [
-            "auto-kiro": "auto",
-            "claude-sonnet-4-5": "claude-sonnet-4.5",
-            "claude-haiku-4-5": "claude-haiku-4.5",
-            "claude-opus-4-5": "claude-opus-4.5",
-            "deepseek-v3-2": "deepseek-3.2",
-        ]
-        return aliases[model] ?? model
+        if model == "auto-kiro" {
+            return "auto"
+        }
+
+        let parts = model.split(separator: "-").map(String.init)
+        guard parts.count >= 4,
+              parts.first == "claude",
+              ["haiku", "sonnet", "opus"].contains(parts[1]),
+              let major = Int(parts[2]),
+              let minor = Int(parts[3]),
+              parts[3].count <= 2 else {
+            return model
+        }
+
+        return "claude-\(parts[1])-\(major).\(minor)"
     }
 
     private func normalize(messages: [OpenAIMessage]) -> [KiroMessage] {
