@@ -2,7 +2,12 @@ import Foundation
 
 struct KiroStreamParser {
     func parse(_ data: Data) -> KiroResponse {
-        let text = String(data: data, encoding: .utf8) ?? ""
+        // AWS event-stream framing intermixes UTF-8 JSON payloads with binary
+        // prelude + CRC32 bytes. Strict `String(data:encoding:.utf8)` returns
+        // nil whenever any non-UTF-8 byte is present, which silently zeroed
+        // every Kiro response. Lossy decode (matches kiro-gateway's
+        // `decode("utf-8", errors="ignore")`) preserves the JSON fragments.
+        let text = String(decoding: data, as: UTF8.self)
         var response = KiroResponse(content: "", toolCalls: [], usage: nil)
         var lastContent: String?
         var currentTool: (id: String, name: String, arguments: String)?
